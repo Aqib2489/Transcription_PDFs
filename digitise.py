@@ -11,6 +11,30 @@ import pathlib
 import PIL.Image
 import zipfile
 import io
+import textwrap
+from IPython.display import display, Markdown
+
+
+# Function to check if Poppler is installed, and install it if not
+def install_poppler():
+    try:
+        # Check if Poppler is installed by checking its version
+        subprocess.run(['pdftoppm', '-v'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("Poppler is already installed.")
+    except FileNotFoundError:
+        print("Poppler not found. Installing Poppler...")
+        # Automatically install Poppler (for Ubuntu/Debian systems)
+        subprocess.run(['apt-get', 'install', '-y', 'poppler-utils'], check=True)
+
+# Automatically install Poppler (this works for Ubuntu/Debian systems, can be adjusted for others)
+if sys.platform == 'linux':
+    install_poppler()
+elif sys.platform == 'darwin':  # For macOS
+    subprocess.run(['brew', 'install', 'poppler'], check=True)
+elif sys.platform == 'win32':  # For Windows
+    poppler_url = 'https://github.com/OSGeo/OSGeo4W/releases/download/4.0.1/poppler-21.09.0-x86_64.7z'
+    print(f"Please install Poppler from {poppler_url} manually for Windows.")
+    sys.exit("Poppler installation is required for Windows.")
 
 
 
