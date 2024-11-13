@@ -7,6 +7,26 @@ import zipfile
 import io
 import os
 
+
+# Function to check and install system dependencies (Poppler)
+def install_poppler():
+    try:
+        # Check if poppler-utils is installed by trying to run 'pdftoppm' (part of Poppler)
+        subprocess.run(["pdftoppm", "-v"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        print("Poppler is already installed.")
+    except FileNotFoundError:
+        # Poppler is not installed, so we install it
+        print("Poppler not found. Installing poppler-utils...")
+        subprocess.run(["sudo", "apt-get", "update", "-y"], check=True)
+        subprocess.run(["sudo", "apt-get", "install", "poppler-utils", "-y"], check=True)
+        print("Poppler installed successfully.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error installing Poppler: {e}")
+
+# Ensure Poppler is installed (this will only run if it's not already installed)
+install_poppler()
+
+
 # Streamlit UI
 st.title("Tool for digitising student's Assignment")
 
