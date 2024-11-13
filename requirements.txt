@@ -5,6 +5,7 @@ Pillow
 zipfile36
 pymupdf
 numpy
+PyMuPDF
 opencv-python-headless
 PyPDF2
 poppler-utils
