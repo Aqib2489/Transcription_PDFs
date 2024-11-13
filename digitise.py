@@ -7,6 +7,11 @@ from pdf2image import convert_from_path
 from zipfile import ZipFile
 import shutil
 
+import pathlib
+import PIL.Image
+import zipfile
+import io
+
 
 
 # Streamlit UI
