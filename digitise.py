@@ -9,10 +9,6 @@ import shutil
 
 
 
-# Ensure Poppler is installed (this will only run if it's not already installed)
-install_poppler()
-
-
 # Streamlit UI
 st.title("Tool for digitising student's Assignment")
 
