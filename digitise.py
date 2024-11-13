@@ -1,42 +1,10 @@
-import subprocess
-import sys
-import os
 import streamlit as st
-import google.generativeai as genai
-from pdf2image import convert_from_path
-from zipfile import ZipFile
-import shutil
-
 import pathlib
-import PIL.Image
+import google.generativeai as genai
 import zipfile
 import io
-import textwrap
-from IPython.display import display, Markdown
-
-
-# Function to check if Poppler is installed, and install it if not
-def install_poppler():
-    try:
-        # Check if Poppler is installed by checking its version
-        subprocess.run(['pdftoppm', '-v'], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print("Poppler is already installed.")
-    except FileNotFoundError:
-        print("Poppler not found. Installing Poppler...")
-        # Automatically install Poppler (for Ubuntu/Debian systems)
-        subprocess.run(['apt-get', 'install', '-y', 'poppler-utils'], check=True)
-
-# Automatically install Poppler (this works for Ubuntu/Debian systems, can be adjusted for others)
-if sys.platform == 'linux':
-    install_poppler()
-elif sys.platform == 'darwin':  # For macOS
-    subprocess.run(['brew', 'install', 'poppler'], check=True)
-elif sys.platform == 'win32':  # For Windows
-    poppler_url = 'https://github.com/OSGeo/OSGeo4W/releases/download/4.0.1/poppler-21.09.0-x86_64.7z'
-    print(f"Please install Poppler from {poppler_url} manually for Windows.")
-    sys.exit("Poppler installation is required for Windows.")
-
-
+import os
+import fitz  # PyMuPDF for PDF text extraction
 
 # Streamlit UI
 st.title("Tool for digitising student's Assignment")
@@ -54,32 +22,35 @@ if GOOGLE_API_KEY:
 
     # Function to process the PDF and extract information based on the question
     def process_pdf(pdf_file, question):
-        # Convert PDF to images
-        images = convert_from_path(pdf_file)
+        # Open the PDF using PyMuPDF (fitz)
+        doc = fitz.open(pdf_file)
 
         # Prepare the output text
         output_text = ""
 
-        # Iterate over extracted images and perform OCR
-        for idx, img in enumerate(images):
-            # Perform OCR on the image by passing it to the generative model
+        # Iterate over each page in the PDF and extract text
+        for idx in range(len(doc)):
+            page = doc.load_page(idx)
+            text = page.get_text("text")  # Extract text from the page
+
+            # Process the extracted text with the generative model
             response = model.generate_content(
                 [
-                    f"Task: Extract everything that is asked to be calculated in the question from the attached image. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The images contain the handwritten solutions to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:"
+                    f"Task: Extract everything that is asked to be calculated in the question from the attached PDF text. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The PDF contains the solution to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:"
 
                     f"Question: {question}"  # Include the user inputted question here
 
-                    f"Image:", img
+                    f"Text:\n{text}"  # Pass the extracted text
                 ],
                 stream=True
             )
             response.resolve()
 
-            # Get the extracted text
-            text = response.text
+            # Get the extracted text from the response
+            extracted_text = response.text
 
             # Append extracted text to the output text
-            output_text += f"\nPage {idx + 1}:\n{text}\n\n"
+            output_text += f"\nPage {idx + 1}:\n{extracted_text}\n\n"
 
         return output_text
 
@@ -87,7 +58,7 @@ if GOOGLE_API_KEY:
     pdf_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
 
     # Input for the question
-    question = st.text_area("Enter all the question of assignments:")
+    question = st.text_area("Enter the question you want to extract information for:")
 
     # Button to start processing
     if st.button("Process PDFs"):
@@ -144,4 +115,3 @@ if GOOGLE_API_KEY:
 
 else:
     st.warning("Please enter your Google API key to start.")
-
