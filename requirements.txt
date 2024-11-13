@@ -3,7 +3,6 @@ google-generativeai
 pdf2image
 Pillow
 zipfile36
-poppler
 pymupdf
 numpy
 opencv-python-headless
