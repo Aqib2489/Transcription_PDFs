@@ -1,12 +1,11 @@
-import streamlit as st
-import pathlib
-import google.generativeai as genai
-from pdf2image import convert_from_path  # To extract images from PDF
-import PIL.Image
-import zipfile
-import io
+import subprocess
+import sys
 import os
-
+import streamlit as st
+import google.generativeai as genai
+from pdf2image import convert_from_path
+from zipfile import ZipFile
+import shutil
 
 # Function to check and install system dependencies (Poppler)
 def install_poppler():
