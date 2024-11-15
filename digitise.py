@@ -7,7 +7,7 @@ import os
 import fitz  # PyMuPDF for PDF text extraction
 
 # Streamlit UI
-st.title("Tool for digitising student's Assignment")
+st.title("Tool for digitising student's Assignment 📝")
 
 # Input for the Google API key
 GOOGLE_API_KEY = st.text_input("Enter your Google API Key:", type="password")
@@ -55,7 +55,7 @@ if GOOGLE_API_KEY:
         return output_text
 
     # File uploader for multiple PDFs
-    pdf_files = st.file_uploader("Upload PDFs here", type="pdf", accept_multiple_files=True)
+    pdf_files = st.file_uploader("Upload PDFs here 📄", type="pdf", accept_multiple_files=True)
 
     # Input for the question
     question = st.text_area("Enter all the questions for assignment you want to digitise:")
