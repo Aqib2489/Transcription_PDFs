@@ -55,10 +55,10 @@ if GOOGLE_API_KEY:
         return output_text
 
     # File uploader for multiple PDFs
-    pdf_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
+    pdf_files = st.file_uploader("Upload PDFs here", type="pdf", accept_multiple_files=True)
 
     # Input for the question
-    question = st.text_area("Enter the question you want to extract information for:")
+    question = st.text_area("Enter all the questions for assignment you want to digitise:")
 
     # Button to start processing
     if st.button("Process PDFs"):
