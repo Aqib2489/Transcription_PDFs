@@ -45,9 +45,20 @@ if GOOGLE_API_KEY:
                 stream=True
             )
             response.resolve()
+            if response.candidates:
+                # Access the first candidate's content if available
+                if response.candidates[0].content.parts:
+                    extracted_text = response.candidates[0].content.parts[0].text
+                else:
+                    print("No generated text found in the candidate.")
+                
+                
+            else:
+                print("No candidates found in the response.")
+
 
             # Get the extracted text from the response
-            extracted_text = response.text
+            # text = response.text
 
             # Append extracted text to the output text
             output_text += f"\nPage {idx + 1}:\n{extracted_text}\n\n"
