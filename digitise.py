@@ -19,26 +19,31 @@ st.title("PDF Handwritten Text Extraction")
 # File uploader allows multiple PDFs
 uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
 
-# Function to process PDF and extract text
+import fitz  # PyMuPDF
+
 def extract_text_from_pdf(uploaded_file):
     # Convert uploaded file to a byte stream
     pdf_file = BytesIO(uploaded_file.read())
 
-    # Convert PDF to images
-    images = convert_from_path(pdf_file)
+    # Open the PDF with PyMuPDF
+    pdf_document = fitz.open(pdf_file)
 
     # Prepare the text content
     extracted_text = ""
 
-    # Iterate over extracted images and perform OCR
-    for idx, img in enumerate(images):
+    # Iterate over each page in the PDF
+    for idx in range(pdf_document.page_count):
+        page = pdf_document.load_page(idx)
+
+        # Get the page's image (as pixmap) and save it if necessary
+        pix = page.get_pixmap()
         img_path = f"pdf_page_{idx+1}.png"
-        img.save(img_path)  # Save the image
+        pix.save(img_path)
 
         # Open the image for OCR
         img = PIL.Image.open(img_path)
 
-        # Perform OCR on the image by passing it to the generative model
+        # Perform OCR on the image
         response = model.generate_content(
             [
                 f"Task: Extract everything that is asked to be calculated in the question from the attached image. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The images contain the handwritten solutions to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:\n\n"
@@ -74,6 +79,7 @@ def extract_text_from_pdf(uploaded_file):
         extracted_text += f"\nPage {idx+1}:\n{text}\n\n"
 
     return extracted_text
+
 
 # Handling multiple PDFs
 if uploaded_files:
