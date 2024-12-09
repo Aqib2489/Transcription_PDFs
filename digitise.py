@@ -1,68 +1,99 @@
+import pathlib
+import google.generativeai as genai
+from pdf2image import convert_from_path  # To extract images from PDF
+import PIL.Image
 import os
-import zipfile
-import tempfile
-import fitz
 import streamlit as st
+from io import BytesIO
 
-def pdf_to_images(pdf_path):
-    doc = fitz.open(pdf_path)
-    images = []
-    
-    # Iterate through each page and convert it to an image
-    for page_num in range(doc.page_count):
-        page = doc.load_page(page_num)  # Load the page
-        pix = page.get_pixmap()  # Render the page to an image
-        
-        # Convert the image to PNG bytes
-        img_bytes = pix.tobytes("png")
-        images.append(img_bytes)
-    
-    return images
+# Configure your Google API key
+GOOGLE_API_KEY = "AIzaSyDTx5XPB1aSTVmYvOAtjGATWWBtJ3TUGiA"  # Set your API key here
+genai.configure(api_key=GOOGLE_API_KEY)
 
-def save_txt_files_from_pdf(pdf_file, images, output_folder):
-    # Extract text from the images
-    # Note: Here you can integrate the Gemini or OCR process to extract text
-    txt_filename = os.path.splitext(pdf_file.name)[0] + '.txt'
-    output_text_file = os.path.join(output_folder, txt_filename)
+# Select the model
+model = genai.GenerativeModel('models/gemini-1.5-pro-latest')
 
-    with open(output_text_file, 'w') as f:
-        # For each image, extract the text (Here, use OCR or generative model logic)
-        for idx, img in enumerate(images):
-            # Dummy extracted text - replace with actual extraction logic
-            text = f"Extracted text for page {idx + 1} of {pdf_file.name}\n"
-            f.write(text)
-        
-        # Delete temporary images
-        print(f"Cleaning up temporary images for {pdf_file.name}")
-    
-    return output_text_file
+# Streamlit user interface
+st.title("PDF Handwritten Text Extraction")
 
-# Streamlit UI
-st.title("PDF Text Extraction and Zipping")
+# File uploader allows multiple PDFs
+uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
 
-uploaded_files = st.file_uploader("Upload PDFs", type="pdf", accept_multiple_files=True)
+# Function to process PDF and extract text
+def extract_text_from_pdf(uploaded_file):
+    # Convert uploaded file to a byte stream
+    pdf_file = BytesIO(uploaded_file.read())
 
+    # Convert PDF to images
+    images = convert_from_path(pdf_file)
+
+    # Prepare the text content
+    extracted_text = ""
+
+    # Iterate over extracted images and perform OCR
+    for idx, img in enumerate(images):
+        img_path = f"pdf_page_{idx+1}.png"
+        img.save(img_path)  # Save the image
+
+        # Open the image for OCR
+        img = PIL.Image.open(img_path)
+
+        # Perform OCR on the image by passing it to the generative model
+        response = model.generate_content(
+            [
+                f"Task: Extract everything that is asked to be calculated in the question from the attached image. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The images contain the handwritten solutions to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:\n\n"
+                "Q1.For the force shown in Figure 1\n"
+                "a) Determine the x, y, and z scalar components of vector F. (Marks 3)\n"
+                "b) Express F in Cartesian vector form. (Marks 1)\n"
+                "c) Determine the direction angles α, β, and γ of force F with respect to the x, y, and z axes and verify that the direction angles satisfy the requirement cos² α + cos² β + cos² γ = 1 (Marks 3)\n"
+                "d) Express F as a product of its magnitude and directional unit vector. (e.g. {10(0.1i + 0.2j + 0.3k)} N). (Marks 1)\n"
+                "Q2. Determine the magnitude and direction angles of F3 shown in Figure 2, so that the resultant of the three forces is zero. (Marks 3)\n"
+                "Q3: Two cables (AB and AC) act on a hook at point A as shown in Figure 3.\n"
+                "a) Determine the position vectors for the internal forces labeled FB and FC. (Marks 2)\n"
+                "b) Express forces FB and FC in Cartesian vector form. (Marks 2)\n"
+                "c) Determine the resultant force R in Cartesian vector form and then determine its magnitude and direction angles. (Marks 3)\n"
+                "d) Determine the angle at A formed by cables AB and AC. (Marks 2)\n"
+                f"Image: {img}"
+            ],
+            stream=True
+        )
+        response.resolve()
+
+        # Get the extracted text
+        if response.candidates:
+            if response.candidates[0].content.parts:
+                text = response.candidates[0].content.parts[0].text
+            else:
+                st.warning(f"No generated text found for page {idx+1}.")
+                text = "No OCR text found."
+        else:
+            st.warning(f"No candidates found for page {idx+1}.")
+            text = "No OCR text found."
+
+        # Append extracted text to the overall text
+        extracted_text += f"\nPage {idx+1}:\n{text}\n\n"
+
+    return extracted_text
+
+# Handling multiple PDFs
 if uploaded_files:
-    with tempfile.TemporaryDirectory() as tmpdirname:
-        zip_filename = os.path.join(tmpdirname, "extracted_texts.zip")
+    for uploaded_file in uploaded_files:
+        st.write(f"Processing file: {uploaded_file.name}")
         
-        with zipfile.ZipFile(zip_filename, 'w') as zipf:
-            for pdf_file in uploaded_files:
-                pdf_path = os.path.join(tmpdirname, pdf_file.name)
-                
-                # Save the uploaded PDF file to the temp directory
-                with open(pdf_path, 'wb') as f:
-                    f.write(pdf_file.getbuffer())
-                
-                # Extract images from PDF using PyMuPDF
-                images = pdf_to_images(pdf_path)
-                
-                # Save the extracted text in the txt file
-                txt_file_path = save_txt_files_from_pdf(pdf_file, images, tmpdirname)
-                
-                # Add the txt file to the zip archive
-                zipf.write(txt_file_path, os.path.basename(txt_file_path))
-        
-        # Allow the user to download the zip file
-        with open(zip_filename, "rb") as f:
-            st.download_button("Download Zip File", f, file_name="extracted_texts.zip")
+        # Extract text from the uploaded PDF
+        extracted_text = extract_text_from_pdf(uploaded_file)
+
+        # Convert the extracted text to a downloadable file
+        txt_filename = os.path.splitext(uploaded_file.name)[0] + '.txt'
+        txt_bytes = BytesIO(extracted_text.encode())
+
+        # Display download button for the text file
+        st.download_button(
+            label=f"Download Extracted Text for {uploaded_file.name}",
+            data=txt_bytes,
+            file_name=txt_filename,
+            mime="text/plain"
+        )
+
+else:
+    st.info("Please upload one or more PDF files.")
