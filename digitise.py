@@ -1,128 +1,125 @@
-import streamlit as st
-import pathlib
-import google.generativeai as genai
-import zipfile
-import io
 import os
-import fitz  # PyMuPDF for PDF text extraction
+import io
+import zipfile
+import fitz  # PyMuPDF for PDF to image conversion
+import google.generativeai as genai
+from PIL import Image
+import streamlit as st
+import tempfile
+import shutil
 
-# Streamlit UI
-st.title("Tool for digitising student's Assignment 📝")
+# Function to convert PDF to images (using PyMuPDF)
+def pdf_to_images(pdf_path):
+    doc = fitz.open(pdf_path)
+    images = []
+    for page_num in range(doc.page_count):
+        page = doc.load_page(page_num)  # Get the page
+        pix = page.get_pixmap()  # Render page to image
+        img_bytes = pix.tobytes("png")  # Convert to PNG bytes
+        images.append(img_bytes)
+    return images
 
-# Input for the Google API key
-GOOGLE_API_KEY = st.text_input("Enter your Google API Key:", type="password")
-
-# Validate if API Key is entered
-if GOOGLE_API_KEY:
-    # Configure the API key
-    genai.configure(api_key=GOOGLE_API_KEY)
-
-    # Select the model
+# Function to extract text using Gemini
+def extract_text_from_pdf(pdf_file, api_key, question):
+    genai.configure(api_key=api_key)
     model = genai.GenerativeModel('models/gemini-1.5-pro-latest')
 
-    # Function to process the PDF and extract information based on the question
-    def process_pdf(pdf_file, question):
-        # Open the PDF using PyMuPDF (fitz)
-        doc = fitz.open(pdf_file)
+    # Convert PDF to images
+    images = pdf_to_images(pdf_file)
 
-        # Prepare the output text
-        output_text = ""
+    extracted_text = []
 
-        # Iterate over each page in the PDF and extract text
-        for idx in range(len(doc)):
-            page = doc.load_page(idx)
-            text = page.get_text("text")  # Extract text from the page
+    # Temporary folder to store images
+    temp_dir = tempfile.mkdtemp()
 
-            # Process the extracted text with the generative model
-            response = model.generate_content(
-                [
-                    f"Task: Extract everything that is asked to be calculated in the question from the attached PDF text. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The PDF contains the solution to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:"
+    # Iterate over extracted images and perform OCR
+    for idx, img_bytes in enumerate(images):
+        img_path = os.path.join(temp_dir, f'pdf_page_{idx + 1}.png')
 
-                    f"Question: {question}"  # Include the user inputted question here
+        # Save the image
+        with open(img_path, 'wb') as img_file:
+            img_file.write(img_bytes)
 
-                    f"Text:\n{text}"  # Pass the extracted text
-                ],
-                stream=True
-            )
-            response.resolve()
-            if response.candidates:
-                # Access the first candidate's content if available
-                if response.candidates[0].content.parts:
-                    extracted_text = response.candidates[0].content.parts[0].text
-                else:
-                    print("No generated text found in the candidate.")
-                
-                
-            else:
-                print("No candidates found in the response.")
+        # Open the image for OCR
+        img = Image.open(img_path)
 
+        # Prepare prompt with the user’s question
+        prompt = f"""
+        Task: Extract everything that is asked to be calculated in the question from the attached image. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The images contain the handwritten solutions to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:
 
-            # Get the extracted text from the response
-            # text = response.text
+        {question}
+        Image:
+        {img}
+        """
 
-            # Append extracted text to the output text
-            output_text += f"\nPage {idx + 1}:\n{extracted_text}\n\n"
+        # Perform OCR on the image by passing it to the generative model
+        response = model.generate_content([prompt], stream=True)
+        response.resolve()
 
-        return output_text
-
-    # File uploader for multiple PDFs
-    pdf_files = st.file_uploader("Upload PDFs here 📄", type="pdf", accept_multiple_files=True)
-
-    # Input for the question
-    question = st.text_area("Enter all the questions for assignment you want to digitise:")
-
-    # Button to start processing
-    if st.button("Process PDFs"):
-        if pdf_files and question.strip():
-            # Display a progress message
-            st.write("Processing... Please wait.")
-            
-            # Create a progress bar
-            progress_bar = st.progress(0)
-            
-            # Create a buffer to hold the zip file
-            zip_buffer = io.BytesIO()
-
-            # Create a ZipFile in memory
-            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                # Process each uploaded PDF
-                for idx, pdf_file in enumerate(pdf_files):
-                    # Create a temporary path for the uploaded PDF file
-                    pdf_path = pathlib.Path("/tmp") / pdf_file.name
-
-                    # Save the uploaded PDF to the temporary path
-                    with open(pdf_path, "wb") as f:
-                        f.write(pdf_file.getbuffer())
-
-                    # Process the PDF and get the extracted text
-                    extracted_text = process_pdf(pdf_path, question)
-
-                    # Prepare the name of the .txt file
-                    txt_filename = pdf_file.name.replace('.pdf', '.txt')
-
-                    # Write the extracted text to the zip archive
-                    zip_file.writestr(txt_filename, extracted_text)
-
-                    # Update the progress bar
-                    progress = (idx + 1) / len(pdf_files)
-                    progress_bar.progress(progress)
-
-                    st.write(f"Extracted text from {pdf_file.name} has been added to the zip archive.")
-
-            # Seek to the beginning of the zip buffer
-            zip_buffer.seek(0)
-
-            # Provide the download button for the zip file
-            st.download_button(
-                label="Download all text files as ZIP",
-                data=zip_buffer,
-                file_name="digitised_pdfs.zip",
-                mime="application/zip"
-            )
-
-            st.success("All PDFs processed and text added to ZIP file.")
+        if response.candidates and response.candidates[0].content.parts:
+            text = response.candidates[0].content.parts[0].text
         else:
-            st.error("Please upload at least one PDF and enter a valid question.")
+            text = "No text extracted from image."
 
-else:
-    st.warning("Please enter your Google API key to start.")
+        extracted_text.append(f"Page {idx + 1}:\n{text}\n")
+
+    # Clean up temporary images after processing
+    shutil.rmtree(temp_dir)
+
+    return extracted_text
+
+# Function to save each PDF’s extracted text in its own text file and create a zip of all txt files
+def save_extracted_text_to_zip(extracted_text, pdf_filename):
+    # Create a zip buffer to store the extracted text files
+    zip_buffer = io.BytesIO()
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        # Save extracted text for each PDF in a separate text file
+        zip_file.writestr(f'{pdf_filename}.txt', '\n'.join(extracted_text))
+    zip_buffer.seek(0)
+    return zip_buffer
+
+# Streamlit UI
+st.title("PDF Text Extraction with Gemini")
+
+# User input for API key
+api_key = st.text_input("Enter your Google API key:")
+
+# User input for custom question
+question = st.text_area("Enter the question to merge with the prompt:")
+
+# File uploader for multiple PDF files
+pdf_files = st.file_uploader("Upload your PDF files", type="pdf", accept_multiple_files=True)
+
+if pdf_files and api_key and question:
+    zip_buffer = io.BytesIO()  # This will store the zip file with all the text files
+    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+        for pdf_file in pdf_files:
+            # Use an in-memory BytesIO buffer for the uploaded PDF
+            pdf_data = pdf_file.read()
+
+            # Save the uploaded PDF data to a temporary file in memory
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf_file:
+                temp_pdf_file.write(pdf_data)
+                temp_pdf_path = temp_pdf_file.name
+            
+            # Extract text from PDF
+            extracted_text = extract_text_from_pdf(temp_pdf_path, api_key, question)
+
+            # Create a zip file for the extracted text from the current PDF
+            zip_file.writestr(f'{os.path.splitext(pdf_file.name)[0]}.txt', '\n'.join(extracted_text))
+            
+            # Clean up the temporary PDF file
+            os.remove(temp_pdf_path)
+
+    # Provide the zip file for download
+    zip_buffer.seek(0)  # Go to the beginning of the zip buffer
+    st.download_button(
+        label="Download Extracted Text as ZIP",
+        data=zip_buffer,
+        file_name="extracted_text_files.zip",
+        mime="application/zip"
+    )
+    
+    # Optionally, show some extracted text preview
+    st.subheader("Preview of Extracted Text:")
+    st.text("\n".join(extracted_text[:3]))  # Show first 3 pages as a preview
