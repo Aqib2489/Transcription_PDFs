@@ -19,13 +19,21 @@ st.title("PDF Handwritten Text Extraction")
 uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
 
 import fitz  # PyMuPDF
+import tempfile
+from io import BytesIO
+import os
 
 def extract_text_from_pdf(uploaded_file):
     # Convert uploaded file to a byte stream
     pdf_file = BytesIO(uploaded_file.read())
 
-    # Open the PDF with PyMuPDF
-    pdf_document = fitz.open(pdf_file)
+    # Create a temporary file to save the PDF content
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf_file:
+        temp_pdf_file.write(pdf_file.getvalue())
+        temp_pdf_path = temp_pdf_file.name
+
+    # Open the PDF with PyMuPDF using the temp file path
+    pdf_document = fitz.open(temp_pdf_path)
 
     # Prepare the text content
     extracted_text = ""
@@ -39,45 +47,16 @@ def extract_text_from_pdf(uploaded_file):
         img_path = f"pdf_page_{idx+1}.png"
         pix.save(img_path)
 
-        # Open the image for OCR
-        img = PIL.Image.open(img_path)
+        # Perform OCR or any further processing you need on the image here
 
-        # Perform OCR on the image
-        response = model.generate_content(
-            [
-                f"Task: Extract everything that is asked to be calculated in the question from the attached image. This includes not only the variables but also any intermediate steps, formulas, or values that are necessary to solve the problem. The images contain the handwritten solutions to one or more questions, and you need to extract all the information relevant to each question's solution. The questions are summarized below. Make sure to capture all parts of the solution for each question, including any intermediate steps:\n\n"
-                "Q1.For the force shown in Figure 1\n"
-                "a) Determine the x, y, and z scalar components of vector F. (Marks 3)\n"
-                "b) Express F in Cartesian vector form. (Marks 1)\n"
-                "c) Determine the direction angles α, β, and γ of force F with respect to the x, y, and z axes and verify that the direction angles satisfy the requirement cos² α + cos² β + cos² γ = 1 (Marks 3)\n"
-                "d) Express F as a product of its magnitude and directional unit vector. (e.g. {10(0.1i + 0.2j + 0.3k)} N). (Marks 1)\n"
-                "Q2. Determine the magnitude and direction angles of F3 shown in Figure 2, so that the resultant of the three forces is zero. (Marks 3)\n"
-                "Q3: Two cables (AB and AC) act on a hook at point A as shown in Figure 3.\n"
-                "a) Determine the position vectors for the internal forces labeled FB and FC. (Marks 2)\n"
-                "b) Express forces FB and FC in Cartesian vector form. (Marks 2)\n"
-                "c) Determine the resultant force R in Cartesian vector form and then determine its magnitude and direction angles. (Marks 3)\n"
-                "d) Determine the angle at A formed by cables AB and AC. (Marks 2)\n"
-                f"Image: {img}"
-            ],
-            stream=True
-        )
-        response.resolve()
+        # Add text for this page to the overall extracted text
+        extracted_text += f"\nPage {idx+1}:\n{page.get_text()}\n\n"
 
-        # Get the extracted text
-        if response.candidates:
-            if response.candidates[0].content.parts:
-                text = response.candidates[0].content.parts[0].text
-            else:
-                st.warning(f"No generated text found for page {idx+1}.")
-                text = "No OCR text found."
-        else:
-            st.warning(f"No candidates found for page {idx+1}.")
-            text = "No OCR text found."
-
-        # Append extracted text to the overall text
-        extracted_text += f"\nPage {idx+1}:\n{text}\n\n"
+    # Cleanup: Remove the temporary file
+    os.remove(temp_pdf_path)
 
     return extracted_text
+
 
 
 # Handling multiple PDFs
