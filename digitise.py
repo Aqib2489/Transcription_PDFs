@@ -1,5 +1,4 @@
 import os
-import io
 import zipfile
 import fitz  # PyMuPDF for PDF to image conversion
 import google.generativeai as genai
@@ -7,6 +6,26 @@ from PIL import Image
 import streamlit as st
 import tempfile
 import shutil
+
+import fitz  # PyMuPDF
+import io
+
+def pdf_to_images(pdf_path):
+    doc = fitz.open(pdf_path)
+    images = []
+    
+    # Iterate through each page and convert it to an image
+    for page_num in range(doc.page_count):
+        page = doc.load_page(page_num)  # Load the page
+        pix = page.get_pixmap()  # Render the page to an image
+        
+        # Convert the image to PNG bytes
+        img_bytes = pix.tobytes("png")
+        images.append(img_bytes)
+    
+    return images
+
+
 
 # Function to convert PDF to images (using PyMuPDF)
 def pdf_to_images(pdf_path):
@@ -18,6 +37,10 @@ def pdf_to_images(pdf_path):
         img_bytes = pix.tobytes("png")  # Convert to PNG bytes
         images.append(img_bytes)
     return images
+
+
+
+
 
 # Function to extract text using Gemini
 def extract_text_from_pdf(pdf_file, api_key, question):
