@@ -1,6 +1,5 @@
 import pathlib
 import google.generativeai as genai
-from pdf2image import convert_from_path  # To extract images from PDF
 import PIL.Image
 import os
 import streamlit as st
