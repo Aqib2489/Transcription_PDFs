@@ -6,11 +6,11 @@ import streamlit as st
 from io import BytesIO
 
 # Configure your Google API key
-GOOGLE_API_KEY = "AIzaSyDTx5XPB1aSTVmYvOAtjGATWWBtJ3TUGiA"  # Set your API key here
+GOOGLE_API_KEY = "API KEY HERE"  # Set your API key here
 genai.configure(api_key=GOOGLE_API_KEY)
 
 # Select the model
-model = genai.GenerativeModel('models/gemini-1.5-pro-latest')
+model = genai.GenerativeModel('models/gemini-2.5-pro-latest')
 
 # Streamlit user interface
 st.title("PDF Handwritten Text Extraction")
